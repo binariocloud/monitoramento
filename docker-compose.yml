@@ -1,0 +1,143 @@
+#Graylog
+version: '3.8'
+services:
+  mongodb:
+    container_name: mongodb
+    image: mongo:4.2
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.0
+    restart: always
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    environment:
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+  graylog:
+    container_name: graylog
+    image: graylog/graylog:4.0
+    volumes:
+      - graylog_data:/usr/share/graylog/data
+    environment:
+      - GRAYLOG_ROOT_TIMEZONE=America/Sao_Paulo
+      - GRAYLOG_PASSWORD_SECRET=$RANDOMPEPPER
+      - GRAYLOG_ROOT_PASSWORD_SHA2=$GRAYLOG_PASSWORD
+      - GRAYLOG_HTTP_EXTERNAL_URI=$IP_SERVER
+    entrypoint: /usr/bin/tini -- wait-for-it elasticsearch:9200 --  /docker-entrypoint.sh
+    links:
+      - mongodb:mongo
+      - elasticsearch
+    restart: always
+    depends_on:
+      - mongodb
+      - elasticsearch
+    ports:
+      # Graylog web interface and REST API
+      - 9000:9000
+      # Syslog TCP
+      - 514:1514
+      - 1514:1514
+      # Syslog UDP
+      - 514:1514/udp
+      - 1514:1514/udp
+      # GELF TCP
+      - 12201:12201
+      # GELF UDP
+      - 12201:12201/udp
+  
+  #Zabbix e Grafana
+  mysql:
+    container_name: mysql
+    image: mysql:5.7
+    restart: always
+    ports:
+      - '3306:3306'
+    volumes:
+      - './zabbix/mysql:/var/lib/data'
+    command: mysqld --character-set-server=utf8 --collation-server=utf8_bin
+    environment:
+      - MYSQL_ROOT_PASSWORD=binariocloud
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=binariocloud
+  zabbix-server:
+    container_name: zabbix-server
+    image: zabbix/zabbix-server-mysql:ubuntu-5.0.1
+    links:
+      - mysql
+    restart: always
+    ports:
+      - '10051:10051'
+    volumes:
+      - './zabbix/alertscripts:/usr/lib/zabbix/alertscripts'
+    environment:
+      - DB_SERVER_HOST=mysql
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=binariocloud
+    depends_on:
+      - mysql
+  zabbix-frontend:
+    container_name: zabbix-frontend
+    image: zabbix/zabbix-web-apache-mysql:ubuntu-5.0.1
+    links:
+      - mysql
+    restart: always
+    ports:
+      - '80:8080'
+      - '443:8443'
+    environment:
+      - DB_SERVER_HOST=mysql
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=binariocloud
+      - PHP_TZ=America/Sao_Paulo
+    depends_on:
+      - mysql
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    links:
+      - mysql
+      - zabbix-server
+    restart: always
+    ports:
+      - '3000:3000'
+    environment: 
+      - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app,grafana-clock-panel
+    depends_on:
+      - mysql
+      - zabbix-server
+  zabbix-agent:
+    container_name: zabbix-agent
+    image: zabbix/zabbix-agent2:alpine-5.0.1
+    user: root
+    links:
+      - zabbix-server
+    restart: always
+    privileged: true
+    volumes:
+      - /var/run:/var/run
+    ports:
+      - '10050:10050'
+    environment:
+      - ZBX_HOSTNAME=Zabbix server
+      - ZBX_SERVER_HOST=zabbix-server
+# Volumes for persisting data, see https://docs.docker.com/engine/admin/volumes/volumes/
+volumes:
+  mongo_data:
+    driver: local
+  es_data:
+    driver: local
+  graylog_data:
+    driver: local
+    
