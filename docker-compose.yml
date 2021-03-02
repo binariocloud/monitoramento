@@ -1,12 +1,14 @@
-#Graylog
+#Por Eduardo Miranda - Binario Cloud
 version: '3.8'
 services:
+  # MongoDB: https://hub.docker.com/_/mongo/
   mongodb:
     container_name: mongodb
     image: mongo:4.2
     restart: always
     volumes:
       - mongo_data:/data/db
+  # Elasticsearch: https://www.elastic.co/guide/en/elasticsearch/reference/6.x/docker.html
   elasticsearch:
     container_name: elasticsearch
     image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.0
@@ -17,11 +19,12 @@ services:
       - http.host=0.0.0.0
       - transport.host=localhost
       - network.host=0.0.0.0
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ulimits:
       memlock:
         soft: -1
         hard: -1
+  # Graylog: https://hub.docker.com/r/graylog/graylog/
   graylog:
     container_name: graylog
     image: graylog/graylog:4.0
@@ -53,6 +56,7 @@ services:
       - 12201:12201
       # GELF UDP
       - 12201:12201/udp
+  
   #Zabbix e Grafana
   mysql:
     container_name: mysql
@@ -64,10 +68,11 @@ services:
       - './zabbix/mysql:/var/lib/data'
     command: mysqld --character-set-server=utf8 --collation-server=utf8_bin
     environment:
-      - MYSQL_ROOT_PASSWORD=binariocloud
+      - MYSQL_ROOT_PASSWORD=$MYSQL_PASSWORD
       - MYSQL_DATABASE=zabbix
       - MYSQL_USER=zabbix
-      - MYSQL_PASSWORD=binariocloud
+      - MYSQL_PASSWORD=$MYSQL_PASSWORD
+
   zabbix-server:
     container_name: zabbix-server
     image: zabbix/zabbix-server-mysql:ubuntu-5.0.1
@@ -82,9 +87,10 @@ services:
       - DB_SERVER_HOST=mysql
       - MYSQL_DATABASE=zabbix
       - MYSQL_USER=zabbix
-      - MYSQL_PASSWORD=binariocloud
+      - MYSQL_PASSWORD=$MYSQL_PASSWORD
     depends_on:
       - mysql
+
   zabbix-frontend:
     container_name: zabbix-frontend
     image: zabbix/zabbix-web-apache-mysql:ubuntu-5.0.1
@@ -98,10 +104,11 @@ services:
       - DB_SERVER_HOST=mysql
       - MYSQL_DATABASE=zabbix
       - MYSQL_USER=zabbix
-      - MYSQL_PASSWORD=binariocloud
+      - MYSQL_PASSWORD=$MYSQL_PASSWORD
       - PHP_TZ=America/Sao_Paulo
     depends_on:
       - mysql
+   
   grafana:
     container_name: grafana
     image: grafana/grafana
@@ -131,6 +138,7 @@ services:
     environment:
       - ZBX_HOSTNAME=Zabbix server
       - ZBX_SERVER_HOST=zabbix-server
+
 # Volumes for persisting data, see https://docs.docker.com/engine/admin/volumes/volumes/
 volumes:
   mongo_data:
